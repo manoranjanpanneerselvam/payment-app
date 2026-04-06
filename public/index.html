@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Payment App</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f0f2f5; }
+    .card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 360px; text-align: center; }
+    h2 { margin-bottom: 24px; color: #333; }
+    input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; margin-bottom: 20px; }
+    button { width: 100%; padding: 14px; background: #2d6ef7; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
+    button:hover { background: #1a56db; }
+    #message { margin-top: 20px; font-weight: bold; color: green; }
+    #message.error { color: red; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Make a Payment</h2>
+    <input type="number" id="amount" placeholder="Enter amount (₹)" min="1" />
+    <button onclick="payNow()">Pay Now</button>
+    <div id="message"></div>
+  </div>
+
+  <!-- Razorpay Checkout Script -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script>
+    async function payNow() {
+      const amount = document.getElementById('amount').value;
+      const msgEl = document.getElementById('message');
+      msgEl.textContent = '';
+      msgEl.className = '';
+
+      if (!amount || amount <= 0) {
+        msgEl.textContent = 'Please enter a valid amount.';
+        msgEl.className = 'error';
+        return;
+      }
+
+      // Step 1: Create order on server
+      const res = await fetch('/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: Number(amount) })
+      });
+      const data = await res.json();
+
+      if (!data.success) {
+        msgEl.textContent = 'Failed to create order.';
+        msgEl.className = 'error';
+        return;
+      }
+
+      // Step 2: Open Razorpay checkout
+      const options = {
+        key: '', // will be injected by server (see note below)
+        amount: data.order.amount,
+        currency: data.order.currency,
+        order_id: data.order.id,
+        name: 'My Payment App',
+        description: 'Test Transaction',
+        handler: async function (response) {
+          // Step 3: Verify payment
+          const verifyRes = await fetch('/verify-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(response)
+          });
+          const verifyData = await verifyRes.json();
+
+          if (verifyData.success) {
+            msgEl.textContent = 'Payment Successful!';
+          } else {
+            msgEl.textContent = 'Payment verification failed.';
+            msgEl.className = 'error';
+          }
+        },
+        prefill: { name: '', email: '', contact: '' },
+        theme: { color: '#2d6ef7' }
+      };
+
+      const rzp = new Razorpay(options);
+      rzp.open();
+    }
+  </script>
+</body>
+</html>
