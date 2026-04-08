@@ -3,26 +3,62 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Payment App</title>
+  <title>My Payment App</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f0f2f5; }
-    .card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 360px; text-align: center; }
-    h2 { margin-bottom: 24px; color: #333; }
+    body { font-family: Arial, sans-serif; display: flex; flex-direction: column; min-height: 100vh; background: #f0f2f5; }
+    header { background: #2d6ef7; color: white; padding: 16px 40px; display: flex; justify-content: space-between; align-items: center; }
+    header h1 { font-size: 20px; }
+    header nav a { color: white; text-decoration: none; margin-left: 20px; font-size: 14px; }
+    header nav a:hover { text-decoration: underline; }
+    main { flex: 1; display: flex; justify-content: center; align-items: center; padding: 40px 20px; }
+    .card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 380px; text-align: center; }
+    .card h2 { margin-bottom: 8px; color: #333; }
+    .card p { color: #666; font-size: 14px; margin-bottom: 24px; }
     input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; margin-bottom: 20px; }
     button { width: 100%; padding: 14px; background: #2d6ef7; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
     button:hover { background: #1a56db; }
     #message { margin-top: 20px; font-weight: bold; color: green; }
     #message.error { color: red; }
+    .secure-badge { margin-top: 16px; font-size: 12px; color: #999; }
+    footer { background: #222; color: #aaa; text-align: center; padding: 20px; font-size: 13px; }
+    footer a { color: #aaa; text-decoration: none; margin: 0 10px; }
+    footer a:hover { color: white; }
+    footer .footer-links { margin-bottom: 8px; }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h2>Make a Payment</h2>
-    <input type="number" id="amount" placeholder="Enter amount (₹)" min="1" />
-    <button onclick="payNow()">Pay Now</button>
-    <div id="message"></div>
-  </div>
+
+  <header>
+    <h1>My Payment App</h1>
+    <nav>
+      <a href="/contact.html">Contact</a>
+      <a href="/privacy-policy.html">Privacy Policy</a>
+      <a href="/terms.html">Terms</a>
+      <a href="/refund-policy.html">Refund Policy</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="card">
+      <h2>Make a Payment</h2>
+      <p>Secure online payments powered by Razorpay</p>
+      <input type="number" id="amount" placeholder="Enter amount (₹)" min="1" />
+      <button onclick="payNow()">Pay Now</button>
+      <div id="message"></div>
+      <div class="secure-badge">Secured by Razorpay | 256-bit SSL Encryption</div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-links">
+      <a href="/contact.html">Contact Us</a>
+      <a href="/privacy-policy.html">Privacy Policy</a>
+      <a href="/terms.html">Terms & Conditions</a>
+      <a href="/refund-policy.html">Refund Policy</a>
+    </div>
+    <div>&copy; 2025 My Payment App. All rights reserved.</div>
+  </footer>
 
   <!-- Razorpay Checkout Script -->
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
@@ -39,50 +75,62 @@
         return;
       }
 
-      // Step 1: Create order on server
-      const res = await fetch('/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: Number(amount) })
-      });
-      const data = await res.json();
+      try {
+        const res = await fetch('/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: Number(amount) })
+        });
+        const data = await res.json();
 
-      if (!data.success) {
-        msgEl.textContent = 'Failed to create order.';
+        if (!data.success) {
+          msgEl.textContent = 'Failed to create order.';
+          msgEl.className = 'error';
+          return;
+        }
+
+        const options = {
+          key: 'rzp_test_SaDdHmpV6gNmA5',
+          amount: data.order.amount,
+          currency: data.order.currency,
+          order_id: data.order.id,
+          name: 'My Payment App',
+          description: 'Secure Payment',
+          handler: async function (response) {
+            try {
+              const verifyRes = await fetch('/verify-payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(response)
+              });
+              const verifyData = await verifyRes.json();
+              if (verifyData.success) {
+                msgEl.textContent = 'Payment Successful!';
+              } else {
+                msgEl.textContent = 'Payment verification failed.';
+                msgEl.className = 'error';
+              }
+            } catch (e) {
+              msgEl.textContent = 'Verification error. Please contact support.';
+              msgEl.className = 'error';
+            }
+          },
+          modal: {
+            ondismiss: function () {
+              msgEl.textContent = 'Payment cancelled.';
+              msgEl.className = 'error';
+            }
+          },
+          prefill: { name: '', email: '', contact: '' },
+          theme: { color: '#2d6ef7' }
+        };
+
+        const rzp = new Razorpay(options);
+        rzp.open();
+      } catch (e) {
+        msgEl.textContent = 'Something went wrong. Please try again.';
         msgEl.className = 'error';
-        return;
       }
-
-      // Step 2: Open Razorpay checkout
-      const options = {
-        key: 'rzp_test_SaDdHmpV6gNmA5',
-        amount: data.order.amount,
-        currency: data.order.currency,
-        order_id: data.order.id,
-        name: 'My Payment App',
-        description: 'Test Transaction',
-        handler: async function (response) {
-          // Step 3: Verify payment
-          const verifyRes = await fetch('/verify-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(response)
-          });
-          const verifyData = await verifyRes.json();
-
-          if (verifyData.success) {
-            msgEl.textContent = 'Payment Successful!';
-          } else {
-            msgEl.textContent = 'Payment verification failed.';
-            msgEl.className = 'error';
-          }
-        },
-        prefill: { name: '', email: '', contact: '' },
-        theme: { color: '#2d6ef7' }
-      };
-
-      const rzp = new Razorpay(options);
-      rzp.open();
     }
   </script>
 </body>
